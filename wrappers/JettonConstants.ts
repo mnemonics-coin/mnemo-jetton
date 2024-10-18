@@ -10,7 +10,7 @@ export abstract class Op {
   static take_wallet_address = 0xd1735400;
   static mint = 21;
   static change_admin = 3;
-  static change_content = 4;
+  static drop_admin = 5;
 }
 
 export abstract class Errors {

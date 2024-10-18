@@ -63,7 +63,7 @@ describe('JettonMinter', () => {
   it('should have admin address', async () => {
     const adminAddress = await jettonMinter.getAdminAddress();
 
-    expect(adminAddress.toRawString()).toEqual(deployer.address.toRawString());
+    expect(adminAddress).toEqualAddress(deployer.address);
   });
 
   it('should allow admin to change admin', async () => {
@@ -78,8 +78,8 @@ describe('JettonMinter', () => {
 
     const adminAddress = await jettonMinter.getAdminAddress();
 
-    expect(adminAddress.toRawString()).not.toEqual(deployer.address.toRawString());
-    expect(adminAddress.toRawString()).toEqual(zeroAddress.toRawString());
+    expect(adminAddress).not.toEqualAddress(deployer.address);
+    expect(adminAddress).toEqualAddress(zeroAddress);
   });
 
   it('should NOT allow non-admin to change admin', async () => {
@@ -92,6 +92,17 @@ describe('JettonMinter', () => {
       success: false,
       exitCode: 73,
     });
+  });
+
+  it('should drop admin', async () => {
+    const result = await jettonMinter.sendDropAdmin(deployer.getSender());
+    expect(result.transactions).toHaveTransaction({
+      from: deployer.address,
+      op: Op.drop_admin,
+      success: true,
+    });
+
+    expect(await jettonMinter.getAdminAddress()).toBe(null);
   });
 
   it('should allow mint jettons by admin', async () => {

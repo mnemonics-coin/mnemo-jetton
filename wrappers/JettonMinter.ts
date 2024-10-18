@@ -187,18 +187,17 @@ export class JettonMinter implements Contract {
       value: toNano('0.05'),
     });
   }
-  static changeContentMessage(content: Cell) {
+  static dropAdminMessage() {
     return beginCell()
-      .storeUint(Op.change_content, 32)
+      .storeUint(Op.drop_admin, 32)
       .storeUint(0, 64) // op, queryId
-      .storeRef(content)
       .endCell();
   }
 
-  async sendChangeContent(provider: ContractProvider, via: Sender, content: Cell) {
+  async sendDropAdmin(provider: ContractProvider, via: Sender) {
     await provider.internal(via, {
       sendMode: SendMode.PAY_GAS_SEPARATELY,
-      body: JettonMinter.changeContentMessage(content),
+      body: JettonMinter.dropAdminMessage(),
       value: toNano('0.05'),
     });
   }
@@ -213,7 +212,7 @@ export class JettonMinter implements Contract {
     let res = await provider.get('get_jetton_data', []);
     let totalSupply = res.stack.readBigNumber();
     let mintable = res.stack.readBoolean();
-    let adminAddress = res.stack.readAddress();
+    let adminAddress = res.stack.readAddressOpt();
     let content = res.stack.readCell();
     let walletCode = res.stack.readCell();
     return {

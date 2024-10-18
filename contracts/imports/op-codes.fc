@@ -7,9 +7,12 @@ int op::burn_notification() asm "0x7bdd97de PUSHINT";
 
 ;; Minter
 int op::mint() asm "21 PUSHINT";
+int op::change_admin() asm "3 PUSHINT";
+int op::drop_admin() asm "5 PUSHINT";
 
 const error::invalid_op = 72;
 const error::wrong_op = 0xffff;
+const error::not_owner = 73;
 const error::not_valid_wallet = 74;
 const error::discovery_fee_not_matched = 75;
 const error::wrong_workchain = 333;
