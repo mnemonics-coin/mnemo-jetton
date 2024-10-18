@@ -7,15 +7,3 @@
     .end_cell(); 
   send_raw_message(msg, 3); ;; mode, 2 for ignoring errors, 1 for sender pays fees, 64 for returning inbound message value
 }
-
-(slice, (int)) ~load_op(slice s) inline { return s.load_uint(32); }
-
-(slice, (int)) ~load_query_id(slice s) inline { return s.load_uint(64); }
-
-int is_bounced(int msg_flags) inline {
-  return msg_flags & 1;
-}
-
-(slice, ()) ~skip_bounced_prefix(slice s) inline {
-  return (s.skip_bits(32), ()); ;; skip 0xFFFFFFFF prefix
-}

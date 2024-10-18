@@ -1,10 +1,13 @@
 import { Blockchain, SandboxContract, TreasuryContract } from '@ton/sandbox';
-import { Address, Cell, fromNano, toNano } from '@ton/core';
+import { Address, Cell, fromNano, toNano, Transaction } from '@ton/core';
 import { buildTokenOnchainMetadataCell, JettonMinter } from '../wrappers/JettonMinter';
 import { JettonWallet } from '../wrappers/JettonWallet';
 import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
 import { Op } from '../wrappers/JettonConstants';
+import { findCompiles } from '@ton/blueprint/dist/utils';
+import { findTransactionRequired } from '@ton/test-utils';
+import { computedGeneric } from './gasUtils';
 
 describe('JettonMinter', () => {
   let code: Cell;
@@ -21,6 +24,7 @@ describe('JettonMinter', () => {
 
   let jettonMinter: SandboxContract<JettonMinter>;
   let userWallet: (address: Address) => Promise<SandboxContract<JettonWallet>>;
+  let printTxGasStats: (name: string, trans: Transaction) => bigint;
 
   beforeEach(async () => {
     blockchain = await Blockchain.create();
@@ -31,6 +35,12 @@ describe('JettonMinter', () => {
       image: '',
       decimals: '9',
     });
+    printTxGasStats = (name, transaction) => {
+      const txComputed = computedGeneric(transaction);
+      console.log(`${name} used ${txComputed.gasUsed} gas`);
+      console.log(`${name} gas cost: ${txComputed.gasFees}`);
+      return txComputed.gasFees;
+    };
 
     deployer = await blockchain.treasury('deployer');
     notDeployer = await blockchain.treasury('notDeployer');
@@ -39,7 +49,7 @@ describe('JettonMinter', () => {
       JettonMinter.createFromConfig({ admin: deployer.address, content: content, wallet_code: walletCode }, code),
     );
 
-    const deployResult = await jettonMinter.sendDeploy(deployer.getSender(), toNano('0.05'));
+    const deployResult = await jettonMinter.sendDeploy(deployer.getSender(), toNano('1'));
 
     expect(deployResult.transactions).toHaveTransaction({
       from: deployer.address,
@@ -85,6 +95,22 @@ describe('JettonMinter', () => {
       to: notDeployer.address,
       op: Op.transfer_notification,
     });
+
+    const transferTx = findTransactionRequired(result.transactions, {
+      on: deployerJettonWallet.address,
+      from: deployer.address,
+      op: Op.transfer,
+      success: true,
+    });
+    printTxGasStats('Jetton transfer', transferTx);
+
+    const receiveTx = findTransactionRequired(result.transactions, {
+      on: notDeployerJettonWallet.address,
+      from: deployerJettonWallet.address,
+      op: Op.internal_transfer,
+      success: true,
+    });
+    printTxGasStats('Receive jetton', receiveTx);
 
     const balance = await notDeployerJettonWallet.getJettonBalance();
     expect(fromNano(balance)).toEqual('100');

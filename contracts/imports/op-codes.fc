@@ -7,3 +7,11 @@ int op::burn_notification() asm "0x7bdd97de PUSHINT";
 
 ;; Minter
 int op::mint() asm "21 PUSHINT";
+
+const error::invalid_op = 72;
+const error::wrong_op = 0xffff;
+const error::not_valid_wallet = 74;
+const error::discovery_fee_not_matched = 75;
+const error::wrong_workchain = 333;
+const error::not_enough_gas = 48;
+const error::invalid_message = 49;

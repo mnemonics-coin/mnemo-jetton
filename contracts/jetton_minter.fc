@@ -10,6 +10,8 @@
 #include "imports/op-codes.fc";
 #include "imports/utils.fc";
 #include "imports/discovery-params.fc";
+#include "imports/gas.fc";
+
 #pragma version >=0.2.0;
 
 (int, slice, cell, cell) load_data() inline {
@@ -35,6 +37,8 @@
 }
 
 () mint_tokens(slice to_address, cell jetton_wallet_code, int amount, cell master_msg) impure {
+    raw_reserve(ONE_TON, RESERVE_REGULAR); ;; reserve for storage fees
+
     cell state_init = calculate_jetton_wallet_state_init(to_address, my_address(), jetton_wallet_code);
     slice to_wallet_address = calculate_jetton_wallet_address(state_init);
     var msg = begin_cell()
@@ -44,7 +48,7 @@
             .store_uint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
             .store_ref(state_init)
             .store_ref(master_msg);
-    send_raw_message(msg.end_cell(), 1); ;; pay transfer fees separately, revert on errors
+    send_raw_message(msg.end_cell(), SEND_MODE_PAY_FEES_SEPARATELY | SEND_MODE_BOUNCE_ON_ACTION_FAIL); ;; pay transfer fees separately, revert on errors
 }
 
 () recv_internal(int msg_value, cell in_msg_full, slice in_msg_body) impure {
@@ -80,13 +84,23 @@
     (int total_supply, slice admin_address, cell content, cell jetton_wallet_code) = load_data();
 
     if (op == op::mint()) {
-        throw_unless(73, equal_slices(sender_address, admin_address));
+        throw_unless(73, equal_slices_bits(sender_address, admin_address));
         slice to_address = in_msg_body~load_msg_addr();
+        check_same_workchain(to_address);
         int amount = in_msg_body~load_coins();
         cell master_msg = in_msg_body~load_ref();
         slice master_msg_cs = master_msg.begin_parse();
-        master_msg_cs~skip_bits(32 + 64); ;; op + query_id
+        throw_unless(error::invalid_op, master_msg_cs~load_op() == op::internal_transfer());
+        master_msg_cs~load_query_id(); ;; skip query_id
         int jetton_amount = master_msg_cs~load_coins();
+        master_msg_cs~load_msg_addr(); ;; skip from_address
+        master_msg_cs~load_msg_addr(); ;; skip response_address
+        int forward_ton_amount = master_msg_cs~load_coins(); ;; forward_ton_amount
+        check_either_forward_payload(master_msg_cs); ;; either_forward_payload
+
+        ;; a little more than needed, it’s ok since it’s sent by the admin and excesses will return back
+        check_amount_is_enough_to_transfer(amount, forward_ton_amount, fwd_fee);
+
         mint_tokens(to_address, jetton_wallet_code, amount, master_msg);
         save_data(total_supply + jetton_amount, admin_address, content, jetton_wallet_code);
         return ();
@@ -95,8 +109,8 @@
     if (op == op::burn_notification()) {
         int jetton_amount = in_msg_body~load_coins();
         slice from_address = in_msg_body~load_msg_addr();
-        throw_unless(74,
-            equal_slices(calculate_user_jetton_wallet_address(from_address, my_address(), jetton_wallet_code), sender_address)
+        throw_unless(error::not_valid_wallet,
+            equal_slices_bits(calculate_user_jetton_wallet_address(from_address, my_address(), jetton_wallet_code), sender_address)
         );
         save_data(total_supply - jetton_amount, admin_address, content, jetton_wallet_code);
         slice response_address = in_msg_body~load_msg_addr();
@@ -114,7 +128,7 @@
     }
 
     if (op == op::provide_wallet_address()) {
-        throw_unless(75, msg_value > fwd_fee + const::provide_address_gas_consumption());
+        throw_unless(error::discovery_fee_not_matched, msg_value > fwd_fee + const::provide_address_gas_consumption());
 
         slice owner_address = in_msg_body~load_msg_addr();
         int include_address? = in_msg_body~load_uint(1);
@@ -141,19 +155,19 @@
     }
 
     if (op == 3) { ;; change admin
-        throw_unless(73, equal_slices(sender_address, admin_address));
+        throw_unless(73, equal_slices_bits(sender_address, admin_address));
         slice new_admin_address = in_msg_body~load_msg_addr();
         save_data(total_supply, new_admin_address, content, jetton_wallet_code);
         return ();
     }
 
     if (op == 4) { ;; change content, delete this for immutable tokens
-        throw_unless(73, equal_slices(sender_address, admin_address));
+        throw_unless(73, equal_slices_bits(sender_address, admin_address));
         save_data(total_supply, admin_address, in_msg_body~load_ref(), jetton_wallet_code);
         return ();
     }
 
-    throw(0xfffe);
+    throw(error::wrong_op);
 }
 
 (int, int, slice, cell, cell) get_jetton_data() method_id {
