@@ -69,8 +69,8 @@
         (int total_supply, slice admin_address, cell content, cell jetton_wallet_code) = load_data();
         save_data(total_supply - jetton_amount, admin_address, content, jetton_wallet_code);
         return ();
-    }   
-    
+    }
+
     slice sender_address = cs~load_msg_addr();
     cs~load_msg_addr(); ;; skip dst
     cs~load_coins(); ;; skip value
@@ -84,7 +84,7 @@
     (int total_supply, slice admin_address, cell content, cell jetton_wallet_code) = load_data();
 
     if (op == op::mint()) {
-        throw_unless(73, equal_slices_bits(sender_address, admin_address));
+        throw_unless(error::not_owner, equal_slices_bits(sender_address, admin_address));
         slice to_address = in_msg_body~load_msg_addr();
         check_same_workchain(to_address);
         int amount = in_msg_body~load_coins();
@@ -155,7 +155,7 @@
     }
 
     if (op == op::change_admin()) {
-        throw_unless(73, equal_slices_bits(sender_address, admin_address));
+        throw_unless(error::not_owner, equal_slices_bits(sender_address, admin_address));
         slice new_admin_address = in_msg_body~load_msg_addr();
         save_data(total_supply, new_admin_address, content, jetton_wallet_code);
         return ();
@@ -164,7 +164,7 @@
     if (op == op::drop_admin()) {
         throw_unless(error::not_owner, equal_slices_bits(sender_address, admin_address));
         in_msg_body.end_parse();
-        save_data(total_supply, address_none(), jetton_wallet_code, jetton_wallet_code);
+        save_data(total_supply, address_none(), content, jetton_wallet_code);
         return ();
     }
 
